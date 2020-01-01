@@ -1,0 +1,2 @@
+# Content_Based_Recommendation_System
+Recommends articles to the user based upon an evaluation of similarity between the content of the article previously consumed by the user and the content of a corpus of 70,000 articles stored in a local NoSQL database. To extract topics from the corpus, three topic modeling techniques- LSA (Latent Semantic Analysis), LDA (Latent Dirichlet Analysis), and NMF (Non-negative Matrix Factorization) are applied and compared. These topics are then used to build the recommendation engine.
