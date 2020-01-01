@@ -10,17 +10,15 @@ from nltk.stem.porter import PorterStemmer
 from sklearn.decomposition import NMF, TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-medium = pd.read_csv(r'C:\Users\Riya Banerjee\PycharmProjects\content_recommender_demo\medium-articles-with-content (1)/true_Medium_AggregatedData.csv')
+medium = pd.read_csv(r'.../true_Medium_AggregatedData.csv')
 # removing articles that are not in english
 medium = medium[medium['language'] == 'en']
 # removing articles which have low rating
 medium = medium[medium['totalClapCount'] >= 25]
-# in order to decrease runtime
-#medium= medium.head(50)
 
+# getting the tags for a particular title and storing it in a list for convenience
 def findTags(title):
     rows = medium[medium['title'] == title]
-    # getting the tags for a particular title and storing it in a list for convenience
     tags = list(rows['tag_name'])
     return tags
 
@@ -43,7 +41,7 @@ for title in titles:
     tag_dict['tags'].append(findTags(title))
 tag_df= pd.DataFrame(tag_dict)
 
-# since we have obtained all tags, we can remove duplicate titles
+#remove duplicate titles
 medium = medium.drop_duplicates(subset='title', keep='first')
 
 # add a column allTags to insert all tags of a title in DataFrame
@@ -69,8 +67,7 @@ def clean_text(text):
     text = re.sub('(?:(?:https?|ftp):\/\/)?[\w/\-?=%.]+\.[\w /\-?= %.]+','', text)
     # Remove non-alphanumerics
     text = re.sub('\w*\d\w*', ' ', text)
-    # Remove
-    # punctuation and lowercase
+    # Remove punctuation and lowercase
     text = re.sub('[%s]' % re.escape(string.punctuation),' ', text.lower())
     # Remove newline characters
     text = text.replace('\n', ' ')
@@ -101,26 +98,17 @@ medium['text'] = medium['text'].apply(stem_text)
 
 '''
 next step is topic modelling
-we will first need to convert our document into a series of word vectors
-we will do that using TFIFD for nmf and svd algo
+first need to convert our document into a series of word vectors
 '''
 
 vectorizer= TfidfVectorizer(stop_words=stop_list, ngram_range=(1,1))
-# creating an instance of tfidvectorizer and we need to specify stopwords coz
-# we are using medium['text'] here not the preprocessed document
+doc_word=vectorizer.fit_transform(medium['text'])  
 
-
-doc_word=vectorizer.fit_transform(medium['text'])   # fit - means making calculation transform- applying calculations to data
-# gives us a sparse matrix
-#print(doc_word) #gives us the matrix
-#print(vectorizer.get_feature_names())- gives the value of text coresspondin to the matrix
-# so next step is to perform dimensionality reduction to obtain the main topics of the matrix
-# algo to perform that is SVD
-
-# applying the first topic modelling algorithm- SVD. through hit and miss decided to keep the topic number as 8
-#svd=TruncatedSVD(8)  # this will extract 8 topics i.e our txt is now in the form of 8 dimensional vectors
+# applying the first topic modelling algorithm- SVD. 
+# through hit and miss decided to keep the topic number as 8
+# this will extract 8 topics i.e our text is now in the form of 8 dimensional vectors
+#svd=TruncatedSVD(8) 
 #doc_svd= svd.fit_transform(doc_word)
-
 
 def display_topics(model, feature_names, no_top_words, no_top_topics, topic_names=None):
     count = 0
@@ -158,8 +146,8 @@ docs_nmf = nmf.fit_transform(doc_word)
 column_names = ['title', 'url', 'allTags', 'readingTime', 'author',
                 'Tech', 'Modeling', 'Bots', 'Deep Learning',
                 'Coding', 'Business', 'Careers', 'NLP', 'sum']
-# Create topic sum for each article
-# Later remove all articles with sum 0- this is done to remove all the articles that have no relation to our topics
+
+# Create topic sum for each article that gives distribution of all topics
 topic_sum = pd.DataFrame(np.sum(docs_nmf, axis = 1))
 # Turn our docs_nmf array into a data frame
 doc_topic_df = pd.DataFrame(data = docs_nmf)
@@ -167,14 +155,15 @@ doc_topic_df = pd.DataFrame(data = docs_nmf)
 doc_topic_df = pd.concat([medium[['title', 'url', 'allTags','readingTime', 'author']], doc_topic_df,topic_sum], axis = 1)
 doc_topic_df.columns = column_names
 # Remove articles with topic sum = 0, then drop sum column
-doc_topic_df = doc_topic_df[doc_topic_df['sum'] != 0]  # sum will be 0 only when all topic distribution is 0, that means such articles are of no use to us. so remove it
+doc_topic_df = doc_topic_df[doc_topic_df['sum'] != 0]  
 doc_topic_df.drop(columns = 'sum', inplace = True)
 # Reset index then save
 doc_topic_df.reset_index(drop = True, inplace = True)
 #doc_topic_df.to_csv('tfidf_nmf_8topics.csv', index = False)
 
 topic_names = ['Tech', 'Modeling', 'Bots', 'Deep Learning','Coding', 'Business', 'Careers', 'NLP']
-topic_array = np.array(doc_topic_df[topic_names])    # basically a row here contains topic distribution for a given article
+# basically a row here contains topic distribution for a given article
+topic_array = np.array(doc_topic_df[topic_names])    
 #print(topic_array)
 norms = np.linalg.norm(topic_array, axis = 1)
 
@@ -192,21 +181,19 @@ def produce_rec(top_vec, topic_array, doc_topic_df, rand = 15):
     Produces a recommendation based on cosine distance.
     rand controls magnitude of randomness.
     '''
+    # adding a bit of randomization so as to give different recommendations
     top_vec = top_vec + np.random.rand(8,)/(np.linalg.norm(top_vec)) * rand
-    # here w e could simply add np.random.rand but that would lead to a lot of randomization so we divide it by the above eqn and here rand= 15 is just randomly taken , we can use
-    # any other value also to minimize the randomization
     co_dists = compute_dists(top_vec, topic_array)
     # print(co_dists)
     #print(np.argmax(co_dists))
     return doc_topic_df.loc[np.argmax(co_dists)]
 
-# for the purpose of output
+# recommendation engine
 def set_prefernce():
     # set the prefernce of user
-    # take the input from user- left
     tech = 5
     modeling = 5
-    bots = 0  #bots
+    bots = 0  
     deep = 0
     coding = 0
     business = 5
